@@ -155,6 +155,8 @@ module Fetcher
       redirect_limit = 6
       response = nil
       cookie_jar = nil
+      original_uri = uri
+      retried_once = 0
 
       until false
         raise ArgumentError, 'HTTP redirect too deep' if redirect_limit == 0
@@ -215,7 +217,6 @@ module Fetcher
             logger.debug "url relative; try to make it absolute"
             newuri = uri + response.header['location']
           end
-          uri = newuri
 
           cookie = response.get_fields('set-cookie')
           if cookie.respond_to?('each')
@@ -224,6 +225,15 @@ module Fetcher
               cookies_array.push(cookie.split('; ')[0])
             }
             cookie_jar = cookies_array.join('; ')
+          end
+
+          if (cookie_jar.to_s.strip.empty?) && ((newuri.host != original_uri.host) || (retried_once == 1))
+            uri = newuri
+          else
+            logger.debug "Detected redirection to original host. Trying the original request with cookie."
+            uri = original_uri
+            redirect_limit = 6
+            retried_once = 1
           end
 
           logger.debug "Set cookie: #{cookie_jar}"
